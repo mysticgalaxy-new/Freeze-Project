@@ -20,11 +20,15 @@ int strcmp(const char* a, const char* b) {
     }
     return a[i] == b[i];
 }
+
 void shell() {
     char buf[128];
     while (1) {
         print("\033[95mFreeze-OS>\033[0m ");
         get_input(buf, sizeof(buf));
+        if (__builtin_strlen(buf) == 0) {
+            continue;
+        }
 
         char* prefix = "";
         int cursor = 0;
