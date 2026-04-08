@@ -27,7 +27,8 @@ void shell() {
     while (1) {
         print("\033[95mFreeze-OS>\033[0m ");
         get_input(buf, sizeof(buf));
-        if (__builtin_strlen(buf) == 0) {
+        // skip empty input
+        if (buf[0] == 0) {
             continue;
         }
 
