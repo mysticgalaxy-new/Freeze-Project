@@ -31,7 +31,7 @@ ASM_OBJECTS = $(patsubst $(SRCDIR)/%.S,$(BUILDDIR)/%.o,$(ASM_SOURCES))
 
 OBJECTS = $(C_OBJECTS) $(ASM_OBJECTS)
 
-all: run
+all: freeze.iso
 
 # compile
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
@@ -65,7 +65,12 @@ freeze.img:
 	fi
 
 run: freeze.iso freeze.img
-	qemu-system-x86_64 -cdrom freeze.iso -drive file=freeze.img,format=raw,media=disk 
+	@if [ -n "$$DISPLAY" ] || [ -n "$$WAYLAND_DISPLAY" ]; then \
+		qemu-system-x86_64 -cdrom freeze.iso -drive file=freeze.img,format=raw,media=disk; \
+	else \
+		echo "No GUI display detected; running QEMU in headless mode."; \
+		qemu-system-x86_64 -cdrom freeze.iso -drive file=freeze.img,format=raw,media=disk -display none -serial stdio; \
+	fi
 
 clean:
 	rm -rf $(BUILDDIR) freeze.iso iso
