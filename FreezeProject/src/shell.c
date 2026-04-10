@@ -2,6 +2,7 @@
 
 #include "fs.h"
 #include "input.h"
+#include "net.h"
 #include "rtc.h"
 #include "vga.h"
 int startswith(const char* s, const char* p) {
@@ -58,9 +59,11 @@ void handle_command(char* buf, const uint buf_size) {
         print("ls, pwd, file, stat, chown, ln, du\n");
         print("kill, exit, sleep\n");
         print("useradd, groups, sudo\n");
-        print(" make, bash, sh, man, which, whereis\n");
+        print("bash, sh, man, which, whereis\n");
         print("clear, about, version, info, test, reboot, hl\n");
         print("edit <name>, cat <name>, rm <name>, save <name>, fsync\n");
+        print("import http://host/path [name]\n");
+        print("import tftp://host/path [name]\n");
     } else if (strcmp(buf, "clear") == 1) {
         clear();
     } else if (strcmp(buf, "-r") == 1) {
@@ -207,6 +210,112 @@ void handle_command(char* buf, const uint buf_size) {
     } else if (strcmp(buf, "fsync") == 1) {
         fs_sync();
         print("File system synced to disk\n");
+    } else if (strcmp(buf, "import") == 1) {
+        print("Usage: import <http://...|tftp://...> [name]\n");
+    } else if (startswith(buf, "import ")) {
+        char url[128];
+        char forced_name[40];
+        char saved_name[40];
+        char body[MAX_FILE_SIZE];
+        char target_path[MAX_FILENAME];
+        uint32_t body_len = 0;
+        int i = 0;
+        int j = 0;
+        int k = 0;
+
+        while (buf[7 + i] == ' ') i++;
+        while (buf[7 + i] && buf[7 + i] != ' ' && j < (int)sizeof(url) - 1) {
+            url[j++] = buf[7 + i++];
+        }
+        url[j] = 0;
+
+        while (buf[7 + i] == ' ') i++;
+        while (buf[7 + i] && buf[7 + i] != ' ' && k < (int)sizeof(forced_name) - 1) {
+            forced_name[k++] = buf[7 + i++];
+        }
+        forced_name[k] = 0;
+
+        if (url[0] == 0) {
+            print("Usage: import <http://...|tftp://...> [name]\n");
+            return;
+        }
+
+        print("Downloading...\n");
+        int rc = -1;
+        if (startswith(url, "http://")) {
+            rc = net_import_http(url,
+                                 forced_name[0] ? forced_name : 0,
+                                 saved_name,
+                                 sizeof(saved_name),
+                                 body,
+                                 sizeof(body),
+                                 &body_len);
+        } else if (startswith(url, "tftp://")) {
+            rc = net_import_tftp(url,
+                                 forced_name[0] ? forced_name : 0,
+                                 saved_name,
+                                 sizeof(saved_name),
+                                 body,
+                                 sizeof(body),
+                                 &body_len);
+        } else {
+            print("Only http:// and tftp:// are supported\n");
+            return;
+        }
+
+        if (rc != 0) {
+            print("Import failed\n");
+            return;
+        }
+
+        if (body_len >= MAX_FILE_SIZE) {
+            print("Downloaded data exceeded local buffer; file was truncated\n");
+        }
+
+        target_path[0] = '/';
+        target_path[1] = 'h';
+        target_path[2] = 'o';
+        target_path[3] = 'm';
+        target_path[4] = 'e';
+        target_path[5] = '/';
+
+        i = 0;
+        while (saved_name[i] && (6 + i) < MAX_FILENAME - 1) {
+            target_path[6 + i] = saved_name[i];
+            i++;
+        }
+        target_path[6 + i] = 0;
+
+        int fd = fs_find(target_path);
+        if (fd < 0) {
+            fd = fs_create(target_path);
+            if (fd < 0) {
+                print("Cannot create destination file\n");
+                return;
+            }
+        }
+
+        if (fs_write(fd, body, body_len) < 0) {
+            print("Cannot write downloaded data\n");
+            return;
+        }
+        if (fs_save(fd) != 0) {
+            const char* fallback = "/home/import.txt";
+            int ffd = fs_find(fallback);
+            if (ffd < 0) {
+                ffd = fs_create(fallback);
+            }
+            if (ffd >= 0 && fs_write(ffd, body, body_len) >= 0 && fs_save(ffd) == 0) {
+                print("Save failed for requested name; saved as /home/import.txt\n");
+                return;
+            }
+            print("Save failed\n");
+            return;
+        }
+
+        print("Imported to ");
+        print(target_path);
+        print("\n");
     } else if (startswith(buf, "rm ")) {
         char* filename = buf + 3;
         if (fs_delete(filename) == 0) {
@@ -1055,7 +1164,7 @@ void handle_command(char* buf, const uint buf_size) {
         print("Unable to do so.\n");
     } else if (strcmp(buf, "colors") == 1) {
         print("Warning! Flasing colors..");
-        char i = 0;
+        int i = 0;
         while (i < 150) {
             print(
                 "\033[31m&&& \033[32m&&& \033[33m&&& \033[34m&&& "
@@ -1215,7 +1324,7 @@ void handle_command(char* buf, const uint buf_size) {
         outb(0x64, 0xFE);
         for (;;);
     } else if (strcmp(buf, ":).sss") == 1) {
-        char i = 0;
+        int i = 0;
         while (i < 150) {
             print("\033[31m   ██  \n");
             print("██  ██  \n");

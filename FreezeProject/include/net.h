@@ -11,11 +11,23 @@ struct net_device {
 };
 
 extern struct net_device *active_net;
-
-/* Scan PCI bus, detect and initialise the best available NIC. */
 void net_scan_pci(void);
-
-/* Call the active driver's poll handler (if any). */
 void net_poll(void);
+int net_ready(void);
+int net_import_http(const char *url,
+                    const char *forced_name,
+                    char *out_name,
+                    uint32_t out_name_cap,
+                    char *out_data,
+                    uint32_t out_cap,
+                    uint32_t *out_len);
 
-#endif /* NET_H */
+int net_import_tftp(const char *url,
+                    const char *forced_name,
+                    char *out_name,
+                    uint32_t out_name_cap,
+                    char *out_data,
+                    uint32_t out_cap,
+                    uint32_t *out_len);
+
+#endif
